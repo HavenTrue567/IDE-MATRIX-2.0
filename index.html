@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TermIDE // Terminal-Themed Development Environment</title>
+    <meta name="description" content="Un entorno de desarrollo integrado (IDE) con estética de terminal retro, soporte multilenguaje y ejecución en tiempo real.">
+    <!-- Google Fonts: Share Tech Mono, Fira Code, JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;700&family=JetBrains+Mono:wght@300;400;500;700&family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Pro-grade Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Main Style -->
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Monaco Editor Loader -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+    <!-- Socket.io -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <!-- Pyodide for Browser-side Python -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+</head>
+<body class="crt-active flicker-active theme-green">
+    <!-- CRT Effect Filters overlay -->
+    <div class="crt-overlay"></div>
+    <div class="scanlines-overlay"></div>
+
+    <div class="app-container">
+        <!-- Top Control Bar / Header -->
+        <header class="app-header">
+            <div class="header-logo">
+                <i class="fa-solid fa-terminal pulse-icon"></i>
+                <span class="logo-text" data-text="TermIDE">TermIDE</span>
+                <span class="logo-version">v1.2.0-PRO</span>
+            </div>
+            
+            <div class="header-controls">
+                <div class="control-group">
+                    <label for="lang-select"><i class="fa-solid fa-code"></i> LENGUAJE:</label>
+                    <select id="lang-select" class="retro-select">
+                        <option value="python" selected>Python (.py)</option>
+                        <option value="csharp">C# (.cs)</option>
+                        <option value="javascript">JavaScript (.js)</option>
+                        <option value="html">HTML5/JS (.html)</option>
+                        <option value="cpp">C++ (.cpp)</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="theme-select"><i class="fa-solid fa-palette"></i> TEMA:</label>
+                    <select id="theme-select" class="retro-select">
+                        <option value="theme-green">Fósforo Verde</option>
+                        <option value="theme-amber">CRT Ámbar</option>
+                        <option value="theme-cyberpunk">Cyberpunk</option>
+                        <option value="theme-dracula">Dracula Vamp</option>
+                        <option value="theme-classic">Gris Clásico</option>
+                    </select>
+                </div>
+
+                <div class="control-group-toggles">
+                    <button id="toggle-crt" class="btn-toggle active" title="Alternar Efecto CRT"><i class="fa-solid fa-desktop"></i> CRT</button>
+                    <button id="toggle-flicker" class="btn-toggle active" title="Alternar Parpadeo"><i class="fa-solid fa-bolt"></i> FLICKER</button>
+                </div>
+            </div>
+
+            <div class="system-status">
+                <span id="runtime-badge" class="badge badge-offline">
+                    <i class="fa-solid fa-circle-nodes"></i> <span id="runtime-text">WEB RUNTIME</span>
+                </span>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="workspace-layout">
+            <!-- Sidebar: File Explorer & File operations -->
+            <aside class="sidebar-panel">
+                <div class="panel-header">
+                    <h3><i class="fa-solid fa-folder-tree"></i> WORKSPACE</h3>
+                    <div class="action-buttons">
+                        <button id="btn-new-file" title="Nuevo Archivo"><i class="fa-solid fa-file-circle-plus"></i></button>
+                        <button id="btn-new-folder" title="Nueva Carpeta"><i class="fa-solid fa-folder-plus"></i></button>
+                        <button id="btn-refresh" title="Refrescar Explorador"><i class="fa-solid fa-rotate"></i></button>
+                    </div>
+                </div>
+                <!-- File explorer tree container -->
+                <div class="file-explorer-container">
+                    <div id="file-tree" class="file-tree-root">
+                        <!-- Populated by JS -->
+                        <div class="tree-placeholder">Conectando al workspace...</div>
+                    </div>
+                </div>
+                <!-- Local storage status / Virtual workspace info -->
+                <div class="workspace-footer">
+                    <span id="workspace-path" class="path-display">Navegador (LocalStorage)</span>
+                </div>
+            </aside>
+
+            <!-- Main Split Center: Editor and Console -->
+            <section class="editor-console-layout">
+                <!-- Editor Top Header & Editor Pane -->
+                <div class="editor-pane">
+                    <div class="panel-header tab-header">
+                        <div class="active-tab">
+                            <i class="fa-solid fa-file-code"></i> <span id="current-filename">main.py</span>
+                            <span id="file-dirty-dot" class="dirty-dot" style="display: none;">*</span>
+                        </div>
+                        <div class="editor-actions">
+                            <button id="btn-save" class="btn-retro" title="Guardar archivo (Ctrl+S)">
+                                <i class="fa-solid fa-floppy-disk"></i> GUARDAR
+                            </button>
+                            <button id="btn-run" class="btn-retro btn-run-action" title="Ejecutar Código (F5)">
+                                <i class="fa-solid fa-play"></i> EJECUTAR [F5]
+                            </button>
+                            <button id="btn-stop" class="btn-retro btn-stop-action" title="Terminar Ejecución (Ctrl+C)" style="display: none;">
+                                <i class="fa-solid fa-square"></i> DETENER
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Editor Container (Monaco Editor mounts here) -->
+                    <div id="editor-container" class="editor-body"></div>
+                </div>
+
+                <!-- Bottom Pane: Interactive Terminal / Output -->
+                <div class="terminal-pane">
+                    <div class="panel-header">
+                        <div class="terminal-tabs">
+                            <button id="tab-terminal" class="term-tab active"><i class="fa-solid fa-terminal"></i> TERMINAL INTERACTIVA</button>
+                            <button id="tab-output" class="term-tab"><i class="fa-solid fa-rectangle-list"></i> CONSOLA DE EJECUCIÓN</button>
+                        </div>
+                        <div class="terminal-actions">
+                            <button id="btn-clear-terminal" class="btn-icon" title="Limpiar Consola"><i class="fa-solid fa-trash-can"></i></button>
+                            <button id="btn-reset-shell" class="btn-icon" title="Reiniciar Shell"><i class="fa-solid fa-power-off"></i></button>
+                        </div>
+                    </div>
+                    
+                    <!-- Terminal Content Containers -->
+                    <div class="terminal-container-wrapper">
+                        <!-- Interactive Terminal Pane (PowerShell/Bash) -->
+                        <div id="terminal-interactive-content" class="terminal-content active">
+                            <div class="terminal-logs" id="terminal-logs">
+                                <!-- Lines printed dynamically -->
+                            </div>
+                            <div class="terminal-input-row">
+                                <span class="prompt" id="terminal-prompt">&gt;</span>
+                                <input type="text" id="terminal-input" autocomplete="off" spellcheck="false" autofocus>
+                            </div>
+                        </div>
+
+                        <!-- Run Output Console Pane (Stdout/Stderr of compiler) -->
+                        <div id="terminal-output-content" class="terminal-content">
+                            <div class="terminal-logs" id="run-logs">
+                                <div class="system-line">[Sistema listo. Presiona EJECUTAR para compilar/correr tu código.]</div>
+                            </div>
+                            <!-- Input row for running programs (for stdin interaction) -->
+                            <div class="terminal-input-row" id="run-input-row" style="display: none;">
+                                <span class="prompt" id="run-prompt">&gt;&gt;</span>
+                                <input type="text" id="run-input" autocomplete="off" spellcheck="false">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modals & Overlay Screens -->
+    <!-- Custom Dialog for File Actions -->
+    <div id="dialog-overlay" class="dialog-overlay" style="display: none;">
+        <div class="retro-dialog">
+            <div class="dialog-header">
+                <span id="dialog-title">MENSAJE DEL SISTEMA</span>
+                <button class="dialog-close" id="btn-dialog-close">&times;</button>
+            </div>
+            <div class="dialog-body">
+                <p id="dialog-message">Introduce el nombre:</p>
+                <input type="text" id="dialog-input" class="retro-input">
+            </div>
+            <div class="dialog-actions">
+                <button id="btn-dialog-ok" class="btn-retro">ACEPTAR</button>
+                <button id="btn-dialog-cancel" class="btn-retro">CANCELAR</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
